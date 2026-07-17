@@ -1,0 +1,6 @@
+comparison,method,membership_auc,std
+oasis1(SUBJ_111) vs oasis2(mpr-1),brainiac,1.0,0.0
+oasis1(SUBJ_111) vs oasis2(mpr-1),radiomics,1.0,0.0
+oasis1(SUBJ_111) vs oasis2(mpr-1),volumetry,0.5798581560283689,0.05725754656374187
+oasis1_mpr1(mpr-1) vs oasis2(mpr-1) [input-level matched],brainiac,1.0,0.0
+oasis1_mpr1(mpr-1) vs oasis2(mpr-1) [input-level matched],radiomics,0.9997163120567375,0.0005673758865248236

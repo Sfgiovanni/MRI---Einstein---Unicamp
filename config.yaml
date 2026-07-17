@@ -1,0 +1,46 @@
+seed: 42
+
+dataset:
+  name: OASIS-1 (cross-sectional)
+  source_url: https://sites.wustl.edu/oasisbrains/home/oasis-1/
+  demographics_xlsx: data/oasis1_raw/demographics.xlsx
+  discs_dir: data/oasis1_raw/discs
+  n_discs: 12
+  label_rule:
+    cn: "CDR == 0"
+    ad: "CDR >= 0.5"
+    excluded: "CDR is None (young/middle-aged, never clinically assessed)"
+
+cv:
+  n_folds: 5
+  strategy: stratified_subject_level
+  folds_csv: data/oasis1_folds.csv
+
+brainiac:
+  repo: https://github.com/AIM-KannLab/BrainIAC
+  local_clone: third_party/BrainIAC
+  checkpoint: checkpoints/BrainIAC.ckpt
+  embedding_dim: 768
+  input_size: [96, 96, 96]
+  template_img: third_party/BrainIAC/src/preprocessing/atlases/temp_head.nii.gz
+
+paths:
+  data: data/
+  checkpoints: checkpoints/
+  features: features/
+  results: results/
+  figures: figures/
+  logs: logs/
+  src: src/
+
+classifiers:
+  - logreg
+  - svm_linear
+  - svm_rbf
+  - random_forest
+  - xgboost
+  - lightgbm
+
+baselines:
+  - radiomics
+  - volumetry

@@ -1,0 +1,29 @@
+# Raw & processed MRI data (tens of GB; OASIS-1/OASIS-2 academic-use terms
+# discourage redistribution). Download instructions are in README.md.
+data/
+oasis1_mpr1_processed/
+
+# BrainIAC model checkpoints (~7.3GB, downloaded separately — see README.md)
+checkpoints/
+
+# External cloned repository (see README.md for the exact clone step used)
+third_party/
+
+# Run logs (local artifacts, not part of the reproducible pipeline)
+logs/
+
+# Claude Code local session state
+.claude/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+
+# Conda/venv
+.conda/
+venv/
+env/
+
+# OS
+.DS_Store
