@@ -6,19 +6,7 @@ classificadores de ML clássicos sobre essas features para classificação biná
 **Alzheimer (AD) vs. controle cognitivamente normal (CN)**, e compara com baselines de
 radiomics e volumetria clássica.
 
-Também inclui uma extensão com um **segundo dataset (OASIS-2)** para replicação
-intra-domínio e, principalmente, **validação cruzada entre coortes** (treinar num
-dataset, testar no outro, nos dois sentidos) — o teste mais direto da alegação de que
-features de foundation model generalizam melhor que baselines clássicos. Um diagnóstico
-de domain-shift feito em revisão mostrou que os embeddings do BrainIAC e as features de
-radiomics separam os dois datasets quase perfeitamente (AUC≈1.0, mesmo após reprocessar
-o OASIS-1 para eliminar uma assimetria de pré-processamento) — ou seja, a hipótese não
-encontra suporte claro nestes dados, e isso é reportado como um resultado honesto, não
-forçado. Ver [`PROGRESS_dataset2.md`](PROGRESS_dataset2.md) para o histórico completo
-dessa extensão, incluindo essa correção.
 
-Acompanhe o progresso e as decisões metodológicas em [`PROGRESS.md`](PROGRESS.md)
-(OASIS-1) e [`PROGRESS_dataset2.md`](PROGRESS_dataset2.md) (OASIS-2 + cross-dataset).
 
 ## Datasets
 
