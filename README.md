@@ -10,35 +10,16 @@ radiomics e volumetria clássica.
 
 ## Datasets
 
-### OASIS-1 (dataset principal)
-Usamos **OASIS-1** (Open Access Series of Imaging Studies, cross-sectional), não um
-dataset do OpenNeuro — ver `PROGRESS.md` para a justificativa (busca exaustiva no
-OpenNeuro não encontrou um dataset T1w AD/CN com N razoável; decisão de usar OASIS-1
-tomada explicitamente pelo usuário).
-
+### OASIS-1 (primeiro dataset)
 - Fonte: https://sites.wustl.edu/oasisbrains/home/oasis-1/
 - Mapeamento binário: **CN = CDR==0** (n=135), **AD = CDR>=0.5** (n=100), sujeitos sem
   CDR avaliado (jovens/meia-idade) excluídos. Ver detalhes e limitações (confundimento
   de idade, Δ~7.7 anos) em `PROGRESS.md`.
 
-### OASIS-2 (segundo dataset, para replicação + cross-dataset)
-Pedido original era MIRIAD (com OASIS-3 como alternativa); ambos exigem acesso
-credenciado com aprovação manual/espera (~1 semana para OASIS-3) que não pude completar
-autonomamente — decisão do usuário foi usar **OASIS-2** em vez disso (mesmo mecanismo
-de acesso direto do OASIS-1). Ver `PROGRESS_dataset2.md` para a justificativa completa.
+### OASIS-2 (segundo dataset)
 
 - Fonte: https://sites.wustl.edu/oasisbrains/home/oasis-2/ (longitudinal, 150 sujeitos,
   1 scan/sujeito mantido = sessão baseline `_MR1`)
-- Mesmo mapeamento binário do OASIS-1 (CN=CDR0 n=85, AD=CDR≥0.5 n=65), aplicado à mesma
-  regra baseada em CDR para manter a comparação válida.
-- **Sem overlap de sujeitos com o OASIS-1** (namespaces de ID disjuntos, `OAS1_` vs
-  `OAS2_`, confirmado programaticamente).
-- ⚠️ **Limitação importante:** OASIS-2 é da mesma instituição/scanner que o OASIS-1
-  (Washington University) — o cross-dataset mede generalização entre coortes distintas,
-  **não mudança de site/scanner**.
-- Ao contrário do OASIS-1 (Δ idade AD-CN ~7.7 anos), o **OASIS-2 é bem pareado por idade**
-  (Δ~-0.87 anos) — uma diferença metodológica relevante para interpretar os resultados.
-
 ## Setup
 
 ```bash
@@ -162,7 +143,7 @@ python src/13_domain_shift_diagnostic.py
 
 ## Resultados
 
-### OASIS-1 (intra-domínio)
+### OASIS-1 
 
 | Método | Melhor classificador | AUC (média CV ± dp) |
 |---|---|---|
@@ -170,13 +151,8 @@ python src/13_domain_shift_diagnostic.py
 | Radiomics (PyRadiomics) | svm_rbf | 0.748 ± 0.012 |
 | Volumetria clássica (eTIV/nWBV/ASF) | logreg | 0.784 ± 0.039 |
 
-Teste de DeLong (predições pooled de CV, pareadas por sujeito): BrainIAC não difere
-significativamente de radiomics (p=0.565) nem de volumetria (p=0.411). Ou seja, **neste
-dataset e protocolo, o BrainIAC (linear probe) não superou estatisticamente os baselines
-mais simples** — resultado factual, não ajustado. Ver `results/summary.md` para a tabela
-completa e limitações (confundimento de idade, N moderado, rótulo por CDR).
 
-### OASIS-2 (intra-domínio - replicação)
+### OASIS-2 
 
 | Método | Melhor classificador | AUC (média CV ± dp) |
 |---|---|---|
