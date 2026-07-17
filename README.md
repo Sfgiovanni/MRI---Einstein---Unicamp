@@ -160,77 +160,9 @@ python src/13_domain_shift_diagnostic.py
 | Radiomics | svm_rbf | 0.640 ± 0.112 |
 | Volumetria | logreg | 0.633 ± 0.086 |
 
-Todos os métodos caem em relação ao OASIS-1 (N menor, folds mais ruidosos), mas a
-**volumetria cai muito mais** (0.784→0.633) que o BrainIAC (0.750→0.710). Investigação:
-a separação de `nWBV` entre grupos (a feature mais discriminativa) é Δ=0.047 no OASIS-1
-mas só Δ=0.020 no OASIS-2 — **achado que sugere que o forte desempenho da volumetria no
-OASIS-1 é parcialmente um artefato do confundimento de idade** (Δ~7.7 anos lá vs
-Δ~-0.87 anos aqui), não puramente sinal de doença. Ver `PROGRESS_dataset2.md` para a
-verificação completa de que isso não é um bug. Sem teste de DeLong significativo entre
-métodos (N pequeno, ver `results_oasis2/summary.md`).
 
-### Validação cruzada entre coortes (experimento principal)
 
-**Diagnóstico de domain-shift (verificação crítica adicional):** antes de interpretar
-qualquer gap de generalização, testamos se um classificador consegue prever de qual
-dataset um sujeito veio (ignorando o rótulo AD/CN). BrainIAC e radiomics separam
-OASIS-1 e OASIS-2 com AUC de dataset-membership de **1.000** — um efeito de lote domina
-completamente esses espaços de features. A hipótese inicial era que isso viesse de uma
-assimetria de pré-processamento (OASIS-1 usava `SUBJ_111`, já processado pelo pipeline
-do próprio OASIS; OASIS-2 usava `mpr-1` bruto). **Reprocessamos o OASIS-1 inteiro a
-partir do `mpr-1` bruto** (mesmo nível de entrada do OASIS-2) para testar isso — e a
-separabilidade continuou em ~1.0, **refutando** essa hipótese: o efeito de lote parece
-ser intrínseco às duas coortes (scanner/protocolo/era de aquisição diferentes), não um
-artefato do nosso pipeline. A volumetria (eTIV/nWBV/ASF), que não passa pelo nosso
-pré-processamento de imagem, tem separabilidade bem menor (AUC=0.58) e por isso é mais
-diretamente interpretável. Ver `results_cross/summary.md` e `PROGRESS_dataset2.md` para
-o relato completo, incluindo a rodada original (superseded) que não pareava o nível de
-entrada.
 
-Tabela abaixo já usa o OASIS-1 reprocessado (`mpr-1`) para os lados cross-dataset de
-BrainIAC/radiomics; volumetria e os AUCs intra-domínio exibidos são inalterados (canônicos,
-via `SUBJ_111`):
-
-| Método | Intra OASIS-1 | Intra OASIS-2 | OASIS1→OASIS2 | OASIS2→OASIS1 | Gap médio |
-|---|---|---|---|---|---|
-| BrainIAC | 0.750 | 0.710 | 0.639 | 0.487 | +0.146 |
-| Radiomics | 0.748 | 0.640 | 0.616 | 0.717 | +0.020 |
-| Volumetria | 0.784 | 0.633 | 0.650 | 0.784 | **-0.009** |
-
-**Nota metodológica sobre o gap:** o gap OASIS1→OASIS2 de BrainIAC/radiomics NÃO usa o
-AUC intra-domínio canônico (`SUBJ_111`) mostrado na tabela — isso misturaria "mudança de
-coorte" com "mudança de pipeline de entrada" (o lado OASIS-1 do treino cross-dataset usa
-`mpr-1`, não `SUBJ_111`). Em vez disso, usa um AUC intra-domínio recalculado nos mesmos
-sujeitos/folds do OASIS-1 mas com `mpr-1` (0.707 para BrainIAC, 0.734 para radiomics) —
-sem essa correção, o gap do BrainIAC estaria superestimado em quase 2x (0.115 vs o valor
-correto 0.069). Ver `results_cross/summary.md` para o detalhamento completo.
-
-**Leitura honesta, com a ressalva do domain-shift no centro — ver `results_cross/summary.md`
-para a discussão completa:**
-- **Nenhum método mostra evidência clara e isolável de generalização "genuína" de sinal
-  de doença entre coortes.** BrainIAC e radiomics têm seus AUCs cross-dataset
-  contaminados por um efeito de lote forte e irredutível (dataset-membership AUC~1.0
-  mesmo após parear o pré-processamento); volumetria tem seu resultado dominado pelo
-  confundidor de idade (gap com sinais opostos entre direções: +0.135/-0.152 — assinatura
-  clássica de exploração de confundidor, não de robustez).
-- **A hipótese original do experimento** ("BrainIAC empata intra-domínio mas degrada
-  menos cross-dataset, evidenciando robustez de foundation model") **não encontra
-  suporte claro nestes dados** — o desenho com 2 coortes da mesma instituição não isola
-  bem essa pergunta, por conta do efeito de lote intrínseco descoberto. Uma leitura
-  anterior (baseada no OASIS-1 não reprocessado) havia enfatizado a consistência de
-  sinal do gap do BrainIAC como evidência qualitativa a favor da hipótese; essa leitura
-  foi revisada para baixo após o diagnóstico de domain-shift, pois o espaço de features
-  onde o gap é medido está dominado por um efeito não relacionado à doença.
-- Um teste de mudança de site/scanner mais limpo exigiria MIRIAD ou OASIS-3 (acesso
-  credenciado indisponível no momento).
-
-**Ressalvas obrigatórias** (ver `results_cross/summary.md` para a lista completa):
-OASIS-2 é do mesmo site/scanner que o OASIS-1 (não testa mudança real de site/scanner);
-efeito de lote entre coortes não explicado pela assimetria de pré-processamento (ver
-diagnóstico acima); os números intra-domínio do OASIS-1 usam `SUBJ_111` enquanto o lado
-cross-dataset usa `mpr-1` reprocessado, então não são estritamente comparáveis em termos
-de pipeline de entrada; confundimento de idade assimétrico entre os datasets; N
-moderado nos dois lados.
 
 ## Estrutura do projeto
 
