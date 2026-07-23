@@ -1,0 +1,4 @@
+{
+  "clf__C": 0.1,
+  "pca__n_components": 0.9
+}

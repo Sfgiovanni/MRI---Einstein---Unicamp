@@ -9,6 +9,7 @@ import os
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
@@ -65,6 +66,28 @@ try:
 except ImportError:
     pass
 
+# Dimensionality-controlled classifiers for high-dim inputs (fusion, 768-d embeddings):
+# L1/L2-penalized logreg, linear SVM, and PCA->logreg with n_components chosen inside
+# each training fold via the inner GridSearchCV (never on the full dataset).
+from sklearn.decomposition import PCA
+
+FUSION_CLASSIFIER_GRIDS = {
+    "logreg_l2": CLASSIFIER_GRIDS["logreg"],
+    "logreg_l1": (
+        LogisticRegression(penalty="l1", solver="liblinear", max_iter=5000, random_state=SEED),
+        {"clf__C": [0.001, 0.01, 0.1, 1.0, 10.0]},
+    ),
+    "svm_linear": CLASSIFIER_GRIDS["svm_linear"],
+    "pca_logreg": (
+        Pipeline([
+            ("scaler", StandardScaler()),
+            ("pca", PCA(random_state=SEED)),
+            ("clf", LogisticRegression(max_iter=5000, random_state=SEED)),
+        ]),
+        {"pca__n_components": [0.90, 0.95, 0.99], "clf__C": [0.01, 0.1, 1.0, 10.0]},
+    ),
+}
+
 
 def load_folds(folds_csv):
     return pd.read_csv(folds_csv)
@@ -87,10 +110,14 @@ def make_stratified_subject_folds(labels_df, n_folds=5, seed=SEED):
     return df
 
 
-def run_cv(features_df, folds_df, feature_cols, method_name, output_dir, classifiers=None):
+def run_cv(features_df, folds_df, feature_cols, method_name, output_dir, classifiers=None, classifier_grids=None):
     """
     features_df: subject_id, label, <feature_cols...>
     folds_df: subject_id, label, fold  (fixed subject-level 5-fold split, shared across methods)
+    classifier_grids: dict of {name: (base_estimator, param_grid)}, defaults to CLASSIFIER_GRIDS.
+        If base_estimator is already a Pipeline (e.g. scaler+PCA+clf for dimensionality-controlled
+        fusion classifiers), it is used as-is instead of being re-wrapped in an outer scaler -
+        scaling/PCA still fit only on the training fold, same leakage guarantee as the default path.
     """
     os.makedirs(os.path.join(output_dir, "predictions"), exist_ok=True)
     os.makedirs(os.path.join(output_dir, "models"), exist_ok=True)
@@ -101,11 +128,12 @@ def run_cv(features_df, folds_df, feature_cols, method_name, output_dir, classif
     )
 
     n_folds = df["fold"].nunique()
-    classifiers = classifiers or list(CLASSIFIER_GRIDS.keys())
+    grids = classifier_grids or CLASSIFIER_GRIDS
+    classifiers = classifiers or list(grids.keys())
 
     all_metrics = []
     for clf_name in classifiers:
-        base_clf, grid = CLASSIFIER_GRIDS[clf_name]
+        base_clf, grid = grids[clf_name]
         fold_preds = []
         for fold in range(n_folds):
             train_df = df[df["fold"] != fold]
@@ -116,7 +144,10 @@ def run_cv(features_df, folds_df, feature_cols, method_name, output_dir, classif
             X_test = test_df[feature_cols].values
             y_test = test_df["label"].values
 
-            pipe = Pipeline([("scaler", StandardScaler()), ("clf", base_clf)])
+            if isinstance(base_clf, Pipeline):
+                pipe = clone(base_clf)
+            else:
+                pipe = Pipeline([("scaler", StandardScaler()), ("clf", base_clf)])
             inner_cv = StratifiedKFold(n_splits=4, shuffle=True, random_state=SEED)
             search = GridSearchCV(pipe, grid, cv=inner_cv, scoring="roc_auc", n_jobs=-1)
             search.fit(X_train, y_train)

@@ -160,8 +160,30 @@ python src/13_domain_shift_diagnostic.py
 | Radiomics | svm_rbf | 0.640 ± 0.112 |
 | Volumetria | logreg | 0.633 ± 0.086 |
 
+### Testes extra: fusão, seleção de features (SHAP), segmentação hipocampal
 
+Três testes adicionais, cada um rodado em OASIS-1 e OASIS-2 e comparado contra o melhor
+baseline daquele dataset via DeLong pareado (Holm-Bonferroni na família de 6 comparações
+primárias por dataset): **fusão** BrainIAC+radiomics (early concat + late stacking),
+**seleção de features via SHAP** (k escolhido por CV interna), e **volume hipocampal**
+(segmentação via SynthSeg), com uma variante exploratória de BrainIAC no recorte do
+hipocampo.
 
+| Método | AUC OASIS-1 | AUC OASIS-2 | Replica nos 2? |
+|---|---|---|---|
+| **Baseline** | **0,776** (volumetria) | **0,689** (BrainIAC) | — |
+| Volume hipocampal (SynthSeg) | 0,807 | 0,723 | ✅ ganho nos 2 (não significativo) |
+| Fusão late (stacking) | 0,763 | 0,705 | ❌ inconsistente |
+| Fusão early (concat) | 0,752 | 0,691 | ❌ inconsistente |
+| SHAP + fusão | 0,769 | 0,626 | ⚠️ perde nos 2 |
+| SHAP + BrainIAC (768d) | 0,754 | 0,642 | ⚠️ perde nos 2 |
+| SHAP + radiomics | 0,720 | 0,602 | ⚠️ perde nos 2 |
+| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,634 | 0,567 | ⚠️ perde nos 2 |
+
+Nenhuma diferença é estatisticamente significativa após Holm-Bonferroni em nenhum dos
+dois datasets. O volume hipocampal é o único método com ganho na mesma direção nos dois
+datasets. Tabelas completas em `results_extra/summary_overall.md` e
+`results_extra_{oasis1,oasis2}/summary.md`.
 
 
 ## Estrutura do projeto
@@ -173,11 +195,16 @@ features/        embeddings/features extraídas (parquet), prefixadas por datase
 results/         OASIS-1: métricas, predições por fold, modelos, summary
 results_oasis2/  OASIS-2: idem, mesma estrutura
 results_cross/   validação cruzada entre coortes: métricas, predições, summary final
-figures/         figuras comparativas (OASIS-1 + cross-dataset)
+results_fusion_{oasis1,oasis2}/       testes extra: fusão early/late
+results_shap_{oasis1,oasis2}/         testes extra: seleção SHAP
+results_hippocampus_{oasis1,oasis2}/  testes extra: segmentação/volume hipocampal
+results_extra_{oasis1,oasis2}/        consolidado por dataset dos testes extra
+results_extra/                        consolidado cross-dataset dos testes extra
+figures/         figuras comparativas (OASIS-1 + cross-dataset + testes extra)
 figures_oasis2/  figuras comparativas do OASIS-2
 logs/            stdout/stderr bruto de cada etapa
 src/             scripts numerados por etapa, parametrizados por --dataset
-third_party/     clone do repositório BrainIAC (submódulo lógico, não git submodule)
+third_party/     clones do BrainIAC e SynthSeg (submódulos lógicos, não git submodule)
 ```
 
 ## Reprodutibilidade
