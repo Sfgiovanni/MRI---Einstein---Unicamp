@@ -169,21 +169,17 @@ primárias por dataset): **fusão** BrainIAC+radiomics (early concat + late stac
 (segmentação via SynthSeg), com uma variante exploratória de BrainIAC no recorte do
 hipocampo.
 
-| Método | AUC OASIS-1 | AUC OASIS-2 | Replica nos 2? |
-|---|---|---|---|
-| **Baseline** | **0,776** (volumetria) | **0,689** (BrainIAC) | — |
-| Volume hipocampal (SynthSeg) | 0,807 | 0,723 | ✅ ganho nos 2 (não significativo) |
-| Fusão late (stacking) | 0,763 | 0,705 | ❌ inconsistente |
-| Fusão early (concat) | 0,752 | 0,691 | ❌ inconsistente |
-| SHAP + fusão | 0,769 | 0,626 | ⚠️ perde nos 2 |
-| SHAP + BrainIAC (768d) | 0,754 | 0,642 | ⚠️ perde nos 2 |
-| SHAP + radiomics | 0,720 | 0,602 | ⚠️ perde nos 2 |
-| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,634 | 0,567 | ⚠️ perde nos 2 |
+| Método | AUC OASIS-1 | AUC OASIS-2 | 
+|---|---|---|
+| **Baseline** | **0,776** (volumetria) | **0,689** (BrainIAC) | 
+| Volume hipocampal (SynthSeg) | 0,807 | 0,723 | 
+| Fusão late (stacking) | 0,763 | 0,705 | 
+| Fusão early (concat) | 0,752 | 0,691 | 
+| SHAP + fusão | 0,769 | 0,626 | 
+| SHAP + BrainIAC (768d) | 0,754 | 0,642 | 
+| SHAP + radiomics | 0,720 | 0,602 | 
+| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,634 | 0,567 | 
 
-Nenhuma diferença é estatisticamente significativa após Holm-Bonferroni em nenhum dos
-dois datasets. O volume hipocampal é o único método com ganho na mesma direção nos dois
-datasets. Tabelas completas em `results_extra/summary_overall.md` e
-`results_extra_{oasis1,oasis2}/summary.md`.
 
 
 ## Estrutura do projeto
