@@ -162,12 +162,6 @@ python src/13_domain_shift_diagnostic.py
 
 ### Testes extra: fusão, seleção de features (SHAP), segmentação hipocampal
 
-Três testes adicionais, cada um rodado em OASIS-1 e OASIS-2 e comparado contra o melhor
-baseline daquele dataset via DeLong pareado (Holm-Bonferroni na família de 6 comparações
-primárias por dataset): **fusão** BrainIAC+radiomics (early concat + late stacking),
-**seleção de features via SHAP** (k escolhido por CV interna), e **volume hipocampal**
-(segmentação via SynthSeg), com uma variante exploratória de BrainIAC no recorte do
-hipocampo.
 
 | Método | AUC OASIS-1 | AUC OASIS-2 | 
 |---|---|---|
