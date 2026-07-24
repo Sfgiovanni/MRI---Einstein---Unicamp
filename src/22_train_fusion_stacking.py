@@ -20,13 +20,11 @@ import pandas as pd
 from sklearn.metrics import balanced_accuracy_score, f1_score, recall_score, roc_auc_score
 
 from common_cv import CLASSIFIER_GRIDS, load_folds, run_cv
-from stats_utils import best_classifier_per_method, load_all_metrics
-
-BASE_RESULTS_DIR = {"oasis1": "results", "oasis2": "results_oasis2"}
+from stats_utils import best_classifier_per_method, load_all_metrics, resolve_results_dir
 
 
 def build_meta_features(dataset, folds_df):
-    base_dir = BASE_RESULTS_DIR[dataset]
+    base_dir = resolve_results_dir(dataset)
     metrics_df = load_all_metrics(base_dir)
     best = best_classifier_per_method(metrics_df)
     assert "brainiac" in best and "radiomics" in best, f"missing base methods in {base_dir}: {best}"

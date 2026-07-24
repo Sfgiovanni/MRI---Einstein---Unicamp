@@ -15,9 +15,7 @@ import os
 import pandas as pd
 
 from stats_utils import best_classifier_per_method, delong_vs_baseline, holm_correct, load_all_metrics, \
-    BASELINE_PREDICTIONS
-
-BASE_RESULTS_DIR = {"oasis1": "results", "oasis2": "results_oasis2"}
+    load_baseline_predictions, resolve_results_dir
 
 # (results_dir, method_name_in_metrics_csv, display_label, is_primary)
 NEW_METHODS = [
@@ -60,16 +58,14 @@ def delong_between(pred_csv_a, label_a, pred_csv_b, label_b):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", required=True, choices=["oasis1", "oasis2"])
+    parser.add_argument("--dataset", required=True)
     args = parser.parse_args()
     ds = args.dataset
-    base_dir = BASE_RESULTS_DIR[ds]
+    base_dir = resolve_results_dir(ds)
     output_dir = f"results_extra_{ds}"
     os.makedirs(output_dir, exist_ok=True)
 
-    baseline_method, baseline_clf, _ = None, None, None
-    info = BASELINE_PREDICTIONS[ds]
-    baseline_method, baseline_clf = info["method"], info["classifier"]
+    baseline_method, baseline_clf, _ = load_baseline_predictions(ds, results_dir=base_dir)
 
     rows = []
     primary_mask = []
@@ -154,7 +150,7 @@ def main():
     if ds == "oasis2":
         lines.append(
             "- Grupo 'Converted' no OASIS-2 classificado pela regra de CDR na baseline (nao pelo "
-            "status futuro) - ver PROGRESS_extra.md / PROGRESS_dataset2.md para a regra completa.\n"
+            "status futuro) - ver src/01_prepare_dataset.py (funcao prepare_oasis2) para a regra completa.\n"
         )
 
     with open(os.path.join(output_dir, "summary.md"), "w") as f:

@@ -12,19 +12,20 @@ from statsmodels.stats.multitest import multipletests
 
 from delong import delong_roc_test
 
-# Locked in PROGRESS_extra.md after auditing results/summary.md and results_oasis2/summary.md.
-# These are the ORIGINAL (non-mpr1) OASIS-1 pipeline and the existing OASIS-2 base pipeline -
-# the "best base method" each dataset's new methods are compared against.
-BASELINE_PREDICTIONS = {
-    "oasis1": {
-        "method": "volumetry", "classifier": "logreg",
-        "predictions_csv": "results/predictions/volumetry_logreg.csv",
-    },
-    "oasis2": {
-        "method": "brainiac", "classifier": "logreg",
-        "predictions_csv": "results_oasis2/predictions/brainiac_logreg.csv",
-    },
-}
+# The 3 methods produced by the base pipeline (src/05, 07, 08) - whichever of these has
+# the highest mean CV AUC for a given dataset is that dataset's "best base method", auto-
+# detected below instead of hardcoded, so a new dataset works with zero code changes here.
+BASELINE_METHOD_CANDIDATES = ["brainiac", "radiomics", "volumetry"]
+
+
+def resolve_results_dir(dataset):
+    """
+    Naming convention used throughout this repo: OASIS-1 (the original/default dataset)
+    keeps the legacy unsuffixed `results/` directory; every other dataset - including any
+    new one a collaborator adds - uses `results_{dataset}/`. Same convention src/05, 07,
+    08, 10 already use for --output_dir defaults.
+    """
+    return "results" if dataset == "oasis1" else f"results_{dataset}"
 
 
 def load_all_metrics(results_dir):
@@ -42,10 +43,27 @@ def best_classifier_per_method(metrics_df):
     return dict(zip(best["method"], best["classifier"]))
 
 
-def load_baseline_predictions(dataset):
-    info = BASELINE_PREDICTIONS[dataset]
-    df = pd.read_csv(info["predictions_csv"]).sort_values("subject_id").reset_index(drop=True)
-    return info["method"], info["classifier"], df
+def load_baseline_predictions(dataset, results_dir=None):
+    """
+    Auto-detects the dataset's best base method: whichever of {brainiac, radiomics,
+    volumetry} has the highest mean CV AUC in that dataset's base-pipeline results dir
+    (run src/01-09 first). No per-dataset hardcoding, so this works for any dataset name.
+    """
+    results_dir = results_dir or resolve_results_dir(dataset)
+    metrics_df = load_all_metrics(results_dir)
+    candidates = metrics_df[metrics_df["method"].isin(BASELINE_METHOD_CANDIDATES)]
+    if candidates.empty:
+        raise RuntimeError(
+            f"No baseline metrics ({BASELINE_METHOD_CANDIDATES}) found in {results_dir} "
+            f"for dataset={dataset}. Run src/01-09 (base pipeline) for this dataset first."
+        )
+    best_clf_per_method = best_classifier_per_method(candidates)
+    best_method = candidates.groupby("method")["auc"].mean().idxmax()
+    best_clf = best_clf_per_method[best_method]
+
+    pred_path = os.path.join(results_dir, "predictions", f"{best_method}_{best_clf}.csv")
+    df = pd.read_csv(pred_path).sort_values("subject_id").reset_index(drop=True)
+    return best_method, best_clf, df
 
 
 def delong_vs_baseline(dataset, new_pred_csv, new_label):

@@ -46,6 +46,25 @@ de `third_party/BrainIAC` (~7.42GB, contém todos os modelos de downstream tasks
 há como baixar seletivamente um único arquivo, o Dropbox sempre serve a pasta inteira),
 extraia apenas `BrainIAC.ckpt` (362MB, encoder ViT-B) e coloque em `checkpoints/BrainIAC.ckpt`.
 
+```bash
+# 4. SHAP (teste extra 2) - so precisa no env brainiac-ad, nao tem dependencia especial
+conda activate brainiac-ad
+pip install shap
+
+# 5. SynthSeg (teste extra 3, hipocampo) - env SEPARADO: o codigo e de 2020-2022 e
+#    depende de TensorFlow 2.2.0/Keras 2.3.1 standalone (nao tf.keras), incompativel
+#    com o env principal (torch/numpy modernos). cudatoolkit/cudnn instalados via conda
+#    dentro do proprio env (nao precisa de CUDA 10.1 no sistema).
+conda create -n synthseg python=3.8 -y
+conda activate synthseg
+git clone https://github.com/BBillot/SynthSeg.git third_party/SynthSeg
+pip install -r third_party/SynthSeg/requirements_python3.8.txt
+conda install -c conda-forge cudatoolkit=10.1 cudnn=7.6.5 -y
+# Pesos (synthseg_1.0.h5) ja vem no clone do repo (third_party/SynthSeg/models/) -
+# sem download separado nem cadastro.
+conda activate brainiac-ad
+```
+
 ## Pipeline (executar em ordem, a partir da raiz do projeto)
 
 Todos os scripts aceitam `--dataset {oasis1,oasis2}` (default `oasis1`) em vez de
@@ -140,6 +159,85 @@ python src/13_domain_shift_diagnostic.py
     de que a assimetria `SUBJ_111` vs `mpr-1` fosse a causa do efeito de lote. Salva
     `results_cross/domain_shift_diagnostic.csv`. Ver "Validação cruzada entre coortes"
     abaixo e `PROGRESS_dataset2.md` para o relato completo.
+
+## Rodando o pipeline com outro dataset
+
+Todo script (`01`-`13`, `20`-`31`) aceita `--dataset <nome>` e deriva os caminhos
+automaticamente (`data/<nome>_...`, `features/<nome>_...`, `results_<nome>/` — exceto
+`oasis1`, que por legado usa `results/` sem sufixo). Nenhum script tem os nomes
+`oasis1`/`oasis2` fixos no código além dos passos 1-2 (parsing de demográficos e
+extração dos arquivos brutos), que são específicos do formato OASIS por natureza.
+
+**Contrato de entrada** — para plugar um dataset novo (`$DATASET` = qualquer nome), o
+pipeline a partir do passo 03 só precisa de 3 arquivos, no formato abaixo:
+
+| Arquivo | Colunas / conteúdo obrigatório |
+|---|---|
+| `data/${DATASET}_raw/nifti/{subject_id}.nii.gz` | 1 scan T1w nativo (com crânio) por sujeito |
+| `data/${DATASET}_labels.csv` | `subject_id`, `label` (0=CN/1=AD); `eTIV` também é obrigatório se for rodar o baseline de volumetria e o teste de volume hipocampal (normalização) |
+| `data/${DATASET}_folds.csv` | `subject_id`, `label`, `fold` — gerar com `common_cv.make_stratified_subject_folds()` (é isso que `01_prepare_dataset.py` chama por baixo) |
+
+Se o seu dataset já tem demográficos num `.xlsx` parecido com OASIS, adicione uma função
+`prepare_<nome>()` a `DATASET_PREPARERS` em `01_prepare_dataset.py` (mesmo padrão de
+`prepare_oasis1`/`prepare_oasis2`) e uma entrada a `DATASET_PATTERNS` em
+`02_extract_and_convert.py` se os dados brutos vierem em `.tar.gz`. Caso contrário, mais
+simples é escrever um script próprio (fora deste repo ou como `01_prepare_dataset_<nome>.py`)
+que produza os 3 arquivos da tabela acima — a partir daí todo o resto funciona sem
+alteração de código.
+
+```bash
+export DATASET=meudataset   # troque pelo nome do seu dataset
+
+# --- Pipeline base: BrainIAC vs radiomics vs volumetria (se os 3 arquivos acima existem) ---
+bash src/03_run_brainiac_preprocessing.sh $DATASET
+python src/04_extract_brainiac_features.py --dataset $DATASET
+python src/05_train_classifiers_brainiac.py --dataset $DATASET
+python src/06_radiomics_baseline.py --dataset $DATASET
+python src/07_train_classifiers_radiomics.py --dataset $DATASET
+python src/08_volumetry_baseline.py --dataset $DATASET
+python src/09_evaluate_compare.py --results_dir results_$DATASET --figures_dir figures_$DATASET
+python src/10_qc_preprocessing.py --dataset $DATASET
+
+# --- Testes extra: fusão (1A/1B) + SHAP (2) - reusam as features do bloco acima ---
+python src/20_prepare_fusion_features.py --dataset $DATASET
+python src/21_train_fusion_early.py --dataset $DATASET
+python src/22_train_fusion_stacking.py --dataset $DATASET
+python src/23_shap_feature_selection.py --dataset $DATASET --feature_set radiomics
+python src/23_shap_feature_selection.py --dataset $DATASET --feature_set fusion
+python src/23_shap_feature_selection.py --dataset $DATASET --feature_set brainiac
+
+# --- Teste extra: hipocampo (3A/3B) - precisa do env `synthseg` (ver Setup) ---
+# ANTES de rodar: verifique a orientação do seu NIfTI bruto (ver nota em src/24) -
+# a correção aplicada é especifica do OASIS-1, outros datasets normalmente não precisam.
+python src/24_prepare_hippocampus_input.py --dataset $DATASET
+conda activate synthseg  # ou: conda run -n synthseg
+# --crop 224 224 224 e um chute seguro pro tamanho de cabeca adulta numa GPU de ~11GB
+# (usamos 160x224x224 pro OASIS-1/2, ~256x256x160 nativo); se der OOM, reduza - mas
+# nunca menor que a extensao real do cerebro na sua imagem (cheque com nibabel: bounding
+# box dos voxels > threshold de fundo, e some uma margem).
+python third_party/SynthSeg/scripts/commands/SynthSeg_predict.py \
+  --i data/${DATASET}_hippo_input --o results_hippocampus_$DATASET/segmentations \
+  --vol results_hippocampus_$DATASET/synthseg_volumes.csv --v1 --threads 4 --crop 224 224 224
+conda activate brainiac-ad
+python src/25_extract_hippocampus_features.py --dataset $DATASET
+python src/26_train_classifiers_hippocampus.py --dataset $DATASET
+python src/27_extract_brainiac_hippo_roi.py --dataset $DATASET
+python src/04_extract_brainiac_features.py --dataset $DATASET \
+  --processed_dir data/${DATASET}_brainiac_hippo_input \
+  --output_csv features/${DATASET}_brainiac_hippo_features_raw.csv \
+  --output_parquet features/${DATASET}_brainiac_hippo_features.parquet
+python src/28_train_classifiers_brainiac_hippo.py --dataset $DATASET
+
+# --- Consolidação: DeLong + Holm-Bonferroni vs o melhor baseline (auto-detectado) ---
+python src/30_consolidate_dataset.py --dataset $DATASET
+
+# --- Comparar 2+ datasets lado a lado (roda 30 para cada um antes) ---
+python src/31_consolidate_overall.py --datasets oasis1 oasis2 $DATASET
+```
+
+O "melhor método base" usado como referência do DeLong em `src/30`/`src/31` é
+auto-detectado (maior AUC média de CV entre BrainIAC/radiomics/volumetria daquele
+dataset, ver `stats_utils.load_baseline_predictions`) — não precisa configurar nada.
 
 ## Resultados
 

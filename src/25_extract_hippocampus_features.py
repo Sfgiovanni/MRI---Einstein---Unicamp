@@ -17,7 +17,7 @@ import pandas as pd
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", required=True, choices=["oasis1", "oasis2"])
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--volumes_csv", default=None)
     parser.add_argument("--labels_csv", default=None)
     parser.add_argument("--output_parquet", default=None)

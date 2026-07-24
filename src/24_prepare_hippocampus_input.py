@@ -16,6 +16,16 @@ publicados (baseline BrainIAC/radiomics/volumetria).
 OASIS-2 (`data/oasis2_raw/nifti/*.nii.gz`, de RAW/mpr-1.nifti): ja tem qform_code=1
 valido, aff2axcodes bate com a identidade real dos eixos (verificado empiricamente) -
 usado como esta, sem nenhuma correcao (link simbolico, sem duplicar dados).
+
+Para um dataset novo (qualquer `--dataset` diferente de oasis1/oasis2): por padrao este
+script so cria links simbolicos (nenhuma correcao aplicada) - o comportamento correto
+se o seu conversor produziu NIfTIs com qform/sform validos. Antes de rodar a segmentacao,
+verifique com:
+    python -c "import nibabel as nib; img = nib.load('data/SEUDATASET_raw/nifti/algum_sujeito.nii.gz'); print(img.header['qform_code'], img.header['sform_code'], nib.aff2axcodes(img.affine))"
+Se `qform_code`/`sform_code` forem 0 (invalidos), inspecione visualmente cortes 2D em
+cada eixo (como feito para o OASIS-1, ver PROGRESS_extra.md) para determinar a
+identidade real dos eixos, e adicione uma funcao `fix_SEUDATASET()` seguindo o padrao de
+`fix_oasis1()` abaixo.
 """
 import argparse
 import os
@@ -52,7 +62,7 @@ def fix_oasis1(in_path, out_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", required=True, choices=["oasis1", "oasis2"])
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--raw_dir", default=None)
     parser.add_argument("--output_dir", default=None)
     args = parser.parse_args()

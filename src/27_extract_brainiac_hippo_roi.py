@@ -66,7 +66,7 @@ def crop_subject(native_path, seg_path, out_path):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", required=True, choices=["oasis1", "oasis2"])
+    parser.add_argument("--dataset", required=True)
     parser.add_argument("--native_dir", default=None)
     parser.add_argument("--seg_dir", default=None)
     parser.add_argument("--output_dir", default=None)

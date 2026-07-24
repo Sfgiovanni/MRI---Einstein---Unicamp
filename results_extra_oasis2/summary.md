@@ -35,4 +35,4 @@ Baseline de referencia (melhor metodo base deste dataset): **brainiac (logreg)**
 - Teste multiplo: familia primaria (6 comparacoes/dataset) corrigida por Holm-Bonferroni; demais comparacoes sao exploratorias e rotuladas como tal, sem correcao.
 - Teste 3B (BrainIAC no ROI do hipocampo) e out-of-distribution para o encoder (campo de visao muito menor que o cerebro inteiro, e em espaco nativo nao registrado) - tratado como exploratorio, nao como comparacao primaria.
 
-- Grupo 'Converted' no OASIS-2 classificado pela regra de CDR na baseline (nao pelo status futuro) - ver PROGRESS_extra.md / PROGRESS_dataset2.md para a regra completa.
+- Grupo 'Converted' no OASIS-2 classificado pela regra de CDR na baseline (nao pelo status futuro) - ver src/01_prepare_dataset.py (funcao prepare_oasis2) para a regra completa.

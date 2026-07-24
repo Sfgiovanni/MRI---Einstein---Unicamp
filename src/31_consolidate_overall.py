@@ -1,22 +1,23 @@
 """
-Consolidado cross-dataset: results_extra/summary_overall.md com tabela lado a lado
-OASIS-1 x OASIS-2 por metodo, destacando achados que se replicam nos dois datasets vs
-achados que so aparecem em um. Figuras (ROC comparativas + boxplot de AUC por metodo,
-por dataset) em figures/.
+Consolidado cross-dataset: results_extra/summary_overall.md com tabela lado a lado de
+todos os datasets passados em --datasets (2 ou mais, default oasis1 oasis2) por metodo,
+destacando achados que se replicam em todos os datasets vs achados que so aparecem em
+alguns. Figuras (ROC comparativas + boxplot de AUC por metodo, por dataset) em figures/.
+
+Cada dataset em --datasets precisa ja ter passado por src/30_consolidate_dataset.py.
 """
+import argparse
 import os
 
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pandas as pd
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_auc_score, roc_curve
 
-from stats_utils import BASELINE_PREDICTIONS
+from stats_utils import best_classifier_per_method, load_all_metrics, load_baseline_predictions, resolve_results_dir
 
 OUTPUT_DIR = "results_extra"
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs("figures", exist_ok=True)
 
 
 def load_dataset_comparisons(ds):
@@ -26,116 +27,135 @@ def load_dataset_comparisons(ds):
     return pd.read_csv(path)
 
 
-def main():
-    dfs = {ds: load_dataset_comparisons(ds) for ds in ["oasis1", "oasis2"]}
-    if any(v is None for v in dfs.values()):
-        missing = [ds for ds, v in dfs.items() if v is None]
-        raise RuntimeError(f"Missing per-dataset consolidation for: {missing}. "
-                            f"Run src/30_consolidate_dataset.py for each dataset first.")
+def classify_replication(group):
+    sig = (group["family"] == "primary") & group["p_holm"].notna() & (group["p_holm"] < 0.05)
+    same_direction = (group["auc_diff"] > 0).nunique() == 1
+    n = len(group)
+    if same_direction and sig.all():
+        return f"REPLICA (significativo nos {n}, mesma direcao)"
+    elif same_direction and (group["auc_diff"] > 0).all():
+        return f"direcao consistente (ganho nos {n}), sem significancia"
+    elif same_direction:
+        return f"direcao consistente (perda nos {n})"
+    else:
+        return "inconsistente entre datasets"
 
-    merged = dfs["oasis1"][["label", "method_name", "auc_new", "auc_diff", "p_value", "p_holm", "family"]].merge(
-        dfs["oasis2"][["label", "method_name", "auc_new", "auc_diff", "p_value", "p_holm", "family"]],
-        on=["label", "method_name"], suffixes=("_oasis1", "_oasis2"),
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--datasets", nargs="+", default=["oasis1", "oasis2"],
+                         help="Nomes dos datasets a consolidar lado a lado (2+; cada um ja "
+                              "processado por src/30_consolidate_dataset.py).")
+    args = parser.parse_args()
+    datasets = args.datasets
+    if len(datasets) < 2:
+        raise SystemExit("--datasets precisa de pelo menos 2 datasets para uma comparacao lado a lado.")
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs("figures", exist_ok=True)
+
+    dfs = {ds: load_dataset_comparisons(ds) for ds in datasets}
+    missing = [ds for ds, v in dfs.items() if v is None]
+    if missing:
+        raise RuntimeError(f"Faltando consolidacao por dataset para: {missing}. "
+                            f"Rode src/30_consolidate_dataset.py --dataset {{ds}} para cada um primeiro.")
+
+    long_rows = []
+    for ds, df in dfs.items():
+        d = df[["label", "method_name", "auc_new", "auc_diff", "p_value", "p_holm", "family"]].copy()
+        d["dataset"] = ds
+        long_rows.append(d)
+    long_df = pd.concat(long_rows, ignore_index=True)
+
+    replication = (
+        long_df.groupby(["label", "method_name"])
+        .apply(classify_replication, include_groups=False)
+        .rename("replication").reset_index()
     )
 
-    def replicates(row):
-        sig1 = row["family_oasis1"] == "primary" and pd.notna(row["p_holm_oasis1"]) and row["p_holm_oasis1"] < 0.05
-        sig2 = row["family_oasis2"] == "primary" and pd.notna(row["p_holm_oasis2"]) and row["p_holm_oasis2"] < 0.05
-        same_direction = (row["auc_diff_oasis1"] > 0) == (row["auc_diff_oasis2"] > 0)
-        if sig1 and sig2 and same_direction:
-            return "REPLICA (significativo nos 2, mesma direcao)"
-        elif same_direction and row["auc_diff_oasis1"] > 0 and row["auc_diff_oasis2"] > 0:
-            return "direcao consistente (ganho nos 2), sem significancia"
-        elif same_direction:
-            return "direcao consistente (perda nos 2)"
-        else:
-            return "inconsistente entre datasets"
+    baseline_info = {ds: load_baseline_predictions(ds, results_dir=resolve_results_dir(ds))[:2] for ds in datasets}
 
-    merged["replication"] = merged.apply(replicates, axis=1)
-
-    lines = ["# Consolidado cross-dataset — OASIS-1 x OASIS-2\n"]
-    lines.append(f"Baseline OASIS-1: {BASELINE_PREDICTIONS['oasis1']['method']} "
-                 f"({BASELINE_PREDICTIONS['oasis1']['classifier']}). "
-                 f"Baseline OASIS-2: {BASELINE_PREDICTIONS['oasis2']['method']} "
-                 f"({BASELINE_PREDICTIONS['oasis2']['classifier']}).\n")
+    lines = [f"# Consolidado cross-dataset — {' x '.join(datasets)}\n"]
+    for ds in datasets:
+        method, clf = baseline_info[ds]
+        lines.append(f"Baseline {ds}: {method} ({clf}).")
+    lines.append("")
     lines.append("Cada dataset e um estudo separado (sem pool entre coortes). Comparacao "
                  "primaria = novo metodo vs melhor metodo base DAQUELE dataset; p-Holm so "
-                 "existe para a familia primaria (6 comparacoes por dataset).\n")
+                 f"existe para a familia primaria (comparacoes primarias por dataset, ver "
+                 f"`results_extra_{{dataset}}/summary.md`).\n")
 
     lines.append("## Tabela lado a lado\n")
-    lines.append("| Metodo | AUC diff OASIS-1 | p-Holm OASIS-1 | AUC diff OASIS-2 | p-Holm OASIS-2 | Replicacao |")
-    lines.append("|---|---|---|---|---|---|")
-    for _, r in merged.sort_values("label").iterrows():
-        ph1 = f"{r['p_holm_oasis1']:.4f}" if pd.notna(r["p_holm_oasis1"]) else "-"
-        ph2 = f"{r['p_holm_oasis2']:.4f}" if pd.notna(r["p_holm_oasis2"]) else "-"
-        lines.append(f"| {r['label']} | {r['auc_diff_oasis1']:+.3f} | {ph1} | "
-                     f"{r['auc_diff_oasis2']:+.3f} | {ph2} | {r['replication']} |")
+    header = "| Metodo | " + " | ".join(f"AUC diff {ds} | p-Holm {ds}" for ds in datasets) + " | Replicacao |"
+    lines.append(header)
+    lines.append("|" + "---|" * (2 * len(datasets) + 2))
 
-    n_replicated = (merged["replication"] == "REPLICA (significativo nos 2, mesma direcao)").sum()
-    lines.append(f"\n**Achados que replicam (significativos nos dois datasets, mesma direcao): {n_replicated}/{len(merged)}**\n")
+    labels = long_df[["label", "method_name"]].drop_duplicates().sort_values("label")
+    for _, lm in labels.iterrows():
+        row_cells = [lm["label"]]
+        for ds in datasets:
+            sub = long_df[(long_df["label"] == lm["label"]) & (long_df["dataset"] == ds)]
+            if sub.empty:
+                row_cells.append("-"); row_cells.append("-")
+                continue
+            r = sub.iloc[0]
+            ph = f"{r['p_holm']:.4f}" if pd.notna(r["p_holm"]) else "-"
+            row_cells.append(f"{r['auc_diff']:+.3f}")
+            row_cells.append(ph)
+        rep = replication[(replication["label"] == lm["label"]) & (replication["method_name"] == lm["method_name"])]
+        row_cells.append(rep["replication"].iloc[0] if len(rep) else "-")
+        lines.append("| " + " | ".join(row_cells) + " |")
+
+    n_replicated = replication["replication"].str.startswith("REPLICA").sum()
+    lines.append(f"\n**Achados que replicam (significativos em todos os {len(datasets)} datasets, "
+                 f"mesma direcao): {n_replicated}/{len(replication)}**\n")
 
     lines.append(
         "\n## Ressalvas obrigatorias\n"
-        "- Confundimento de idade nao corrigido em nenhum dos dois datasets (OASIS-1: AD mais velho, "
-        "delta~+7.7 anos; OASIS-2: quase pareado, delta~-0.87 anos - direcoes opostas, o que ja e "
-        "por si um resultado relevante para interpretar diferencas entre os dois baselines).\n"
-        "- N moderado nos dois datasets (OASIS-1 n=235, OASIS-2 n=150) - intervalos de confianca amplos.\n"
-        "- Teste multiplo: familia primaria (6 comparacoes) corrigida por Holm-Bonferroni EM CADA dataset "
-        "separadamente (nao ha correcao conjunta cross-dataset - os dois sao estudos paralelos).\n"
-        "- Teste 3B (BrainIAC no ROI do hipocampo) e exploratorio/OOD nos dois datasets - nao entra na "
-        "familia primaria nem na conclusao de replicacao.\n"
-        "- Regra do grupo 'Converted' no OASIS-2: classificado pela CDR na baseline (nao pelo status "
-        "futuro) - 13 sujeitos 'Converted' com CDR=0 na baseline contam como CN.\n"
-        "- OASIS-1 raw (PROCESSED/MPRAGE/SUBJ_111, ANALYZE 7.5) tinha um defeito de orientacao "
-        "(qform/sform invalidos, eixos do array rotulados errado pelo affine fallback do nibabel) que "
-        "quebrava a segmentacao hipocampal (FastSurfer E SynthSeg falhavam identicamente) - corrigido "
-        "via reorientacao determinada empiricamente antes da segmentacao (ver PROGRESS_extra.md); "
-        "OASIS-2 nao precisou de correcao (qform ja valido).\n"
+        "- Cada dataset e tratado como estudo independente - sem pool entre coortes.\n"
+        "- N moderado - intervalos de confianca amplos esperados em todos os datasets.\n"
+        "- Teste multiplo: familia primaria corrigida por Holm-Bonferroni EM CADA dataset "
+        "separadamente (nao ha correcao conjunta cross-dataset).\n"
+        "- Testes marcados como exploratorios/OOD (ex.: BrainIAC no ROI do hipocampo) nao entram "
+        "na familia primaria nem na conclusao de replicacao.\n"
+        "- Ver `results_extra_{dataset}/summary.md` de cada dataset para ressalvas especificas "
+        "(confundimento de idade, regras de rotulagem, QC de segmentacao, etc.).\n"
     )
 
     with open(os.path.join(OUTPUT_DIR, "summary_overall.md"), "w") as f:
         f.write("\n".join(lines))
-    merged.to_csv(os.path.join(OUTPUT_DIR, "overall_comparison_table.csv"), index=False)
+
+    wide = long_df.pivot(index=["label", "method_name"], columns="dataset",
+                          values=["auc_diff", "p_holm"]).reset_index()
+    wide.columns = ["_".join(c).strip("_") for c in wide.columns.to_flat_index()]
+    wide = wide.merge(replication, on=["label", "method_name"])
+    wide.to_csv(os.path.join(OUTPUT_DIR, "overall_comparison_table.csv"), index=False)
+
     print(f"Written {OUTPUT_DIR}/summary_overall.md")
-    print(merged[["label", "auc_diff_oasis1", "p_holm_oasis1", "auc_diff_oasis2", "p_holm_oasis2", "replication"]].to_string(index=False))
+    print(wide.to_string(index=False))
 
-    make_figures()
-
-
-RESULTS_DIRS = {
-    "oasis1": {
-        "baseline": "results", "fusion": "results_fusion_oasis1",
-        "shap": "results_shap_oasis1", "hippocampus": "results_hippocampus_oasis1",
-    },
-    "oasis2": {
-        "baseline": "results_oasis2", "fusion": "results_fusion_oasis2",
-        "shap": "results_shap_oasis2", "hippocampus": "results_hippocampus_oasis2",
-    },
-}
+    make_figures(datasets)
 
 
-def make_figures():
-    for ds, dirs in RESULTS_DIRS.items():
+def make_figures(datasets):
+    for ds in datasets:
         comp = load_dataset_comparisons(ds)
         if comp is None:
             continue
+        base_dir = resolve_results_dir(ds)
+        base_method, base_clf, base_pred = load_baseline_predictions(ds, results_dir=base_dir)
 
-        # baseline pooled predictions
-        base_method = BASELINE_PREDICTIONS[ds]["method"]
-        base_clf = BASELINE_PREDICTIONS[ds]["classifier"]
-        base_pred = pd.read_csv(os.path.join(dirs["baseline"], "predictions", f"{base_method}_{base_clf}.csv"))
+        results_dir_lookup = {
+            "fusion_early": f"results_fusion_{ds}", "fusion_late": f"results_fusion_{ds}",
+            "hippocampus": f"results_hippocampus_{ds}", "brainiac_hippo": f"results_hippocampus_{ds}",
+            "shap_radiomics": f"results_shap_{ds}", "shap_fusion": f"results_shap_{ds}", "shap_brainiac": f"results_shap_{ds}",
+        }
 
-        # gather predictions for each new method's best classifier
         pred_lookup = {"baseline": ("baseline", base_pred)}
         for _, r in comp.iterrows():
-            results_dir = {
-                "fusion_early": dirs["fusion"], "fusion_late": dirs["fusion"],
-                "hippocampus": dirs["hippocampus"], "brainiac_hippo": dirs["hippocampus"],
-                "shap_radiomics": dirs["shap"], "shap_fusion": dirs["shap"], "shap_brainiac": dirs["shap"],
-            }.get(r["method_name"])
+            results_dir = results_dir_lookup.get(r["method_name"])
             if results_dir is None:
                 continue
-            from stats_utils import load_all_metrics, best_classifier_per_method
             try:
                 metrics_df = load_all_metrics(results_dir)
                 metrics_df = metrics_df[metrics_df["method"] == r["method_name"]]
@@ -148,7 +168,6 @@ def make_figures():
         plt.figure(figsize=(7, 7))
         for name, (label, df) in pred_lookup.items():
             fpr, tpr, _ = roc_curve(df["y_true"], df["y_prob"])
-            from sklearn.metrics import roc_auc_score
             auc = roc_auc_score(df["y_true"], df["y_prob"])
             plt.plot(fpr, tpr, label=f"{label} AUC={auc:.3f}")
         plt.plot([0, 1], [0, 1], linestyle="--", color="gray")
@@ -166,7 +185,6 @@ def make_figures():
                 continue
             for fold in sorted(df["fold"].unique()):
                 fp = df[df["fold"] == fold]
-                from sklearn.metrics import roc_auc_score
                 box_rows.append({"method": label, "fold": fold, "auc": roc_auc_score(fp["y_true"], fp["y_prob"])})
         if box_rows:
             import seaborn as sns
