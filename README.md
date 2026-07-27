@@ -41,10 +41,8 @@ git clone https://github.com/AIM-KannLab/BrainIAC.git third_party/BrainIAC
 touch third_party/BrainIAC/src/preprocessing/HD_BET/__init__.py
 ```
 
-Pesos do BrainIAC: baixe o zip completo de checkpoints pelo link do Dropbox no README
-de `third_party/BrainIAC` (~7.42GB, contém todos os modelos de downstream tasks — não
-há como baixar seletivamente um único arquivo, o Dropbox sempre serve a pasta inteira),
-extraia apenas `BrainIAC.ckpt` (362MB, encoder ViT-B) e coloque em `checkpoints/BrainIAC.ckpt`.
+Pesos do BrainIAC: baixe o checkpoint `BrainIAC.ckpt` (362MB, encoder ViT-B) pelo link do Dropbox: https://www.dropbox.com/scl/fo/i51xt63roognvt7vuslbl/AG99uZljziHss5zJz4HiFis?rlkey=9w55le6tslwxlfz6c0viylmjb&st=b9cnvwh8&e=1&dl=0 
+e coloque em `checkpoints/BrainIAC.ckpt`.
 
 ```bash
 # 4. SHAP (teste extra 2) - so precisa no env brainiac-ad, nao tem dependencia especial
