@@ -261,7 +261,7 @@ dataset, ver `stats_utils.load_baseline_predictions`) — não precisa configura
 
 | Método | AUC OASIS-1 | AUC OASIS-2 | 
 |---|---|---|
-| **Baseline** | **0,776** (volumetria) | **0,689** (BrainIAC) | 
+| **Baseline** | **0.748** (volumetria) | **0.710** (BrainIAC) | 
 | Volume hipocampal (SynthSeg) | 0,807 | 0,723 | 
 | Fusão late (stacking) | 0,763 | 0,705 | 
 | Fusão early (concat) | 0,752 | 0,691 | 
