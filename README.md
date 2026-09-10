@@ -272,6 +272,38 @@ dataset, ver `stats_utils.load_baseline_predictions`) — não precisa configura
 
 
 
+### Bonn (epilepsia pediátrica: displasia cortical focal vs controles)
+
+Terceiro dataset, usado para testar o mesmo pipeline fora do contexto AD/CN: 170 sujeitos
+(85 DCF / 85 controles saudáveis, 3–13 anos), T1w em BIDS, CV 5-fold estratificado por
+sujeito. Sem a volumetria clássica (eTIV/nWBV/ASF vêm da planilha do OASIS e não existem
+aqui), então os baselines são só BrainIAC e radiomics. Resultados em `results_bonn/` e
+`results_extra_bonn/`.
+
+| Método | Melhor classificador | AUC (média CV ± dp) |
+|---|---|---|
+| BrainIAC (embeddings ViT congelados) | svm_linear | 0.804 ± 0.076 |
+| Radiomics (PyRadiomics) | logreg | 0.791 ± 0.038 |
+
+Testes extra (AUC das predições pooled de CV, teste de DeLong vs o melhor baseline;
+Holm-Bonferroni na família primária):
+
+| Método | AUC Bonn | Δ vs baseline | p-Holm |
+|---|---|---|---|
+| **Baseline** | **0,791** (radiomics) | — | — |
+| Fusão early (concat) | 0,873 | +0,082 | 0,045 |
+| SHAP + fusão | 0,837 | +0,047 | 0,49 |
+| Fusão late (stacking) | 0,817 | +0,026 | 1,0 |
+| SHAP + radiomics | 0,797 | +0,006 | 1,0 |
+| SHAP + BrainIAC (768d) | 0,777 | −0,014 | 1,0 |
+| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,740 | −0,050 | 0,22 (p bruto) |
+| Volume hipocampal (SynthSeg) | 0,558 | −0,233 | <0,001 |
+
+A fusão early é a única diferença significativa após correção. O volume hipocampal é
+próximo do acaso — esperado, já que a DCF é uma lesão cortical, não hipocampal — e o
+BrainIAC no ROI do hipocampo herda a mesma limitação, além de ser out-of-distribution
+para o encoder.
+
 ## Estrutura do projeto
 
 ```
@@ -286,6 +318,7 @@ results_shap_{oasis1,oasis2}/         testes extra: seleção SHAP
 results_hippocampus_{oasis1,oasis2}/  testes extra: segmentação/volume hipocampal
 results_extra_{oasis1,oasis2}/        consolidado por dataset dos testes extra
 results_extra/                        consolidado cross-dataset dos testes extra
+results_bonn/, results_*_bonn/        Bonn (DCF vs controles): mesma estrutura por dataset
 figures/         figuras comparativas (OASIS-1 + cross-dataset + testes extra)
 figures_oasis2/  figuras comparativas do OASIS-2
 logs/            stdout/stderr bruto de cada etapa
