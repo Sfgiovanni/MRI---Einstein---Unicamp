@@ -288,16 +288,16 @@ aqui), então os baselines são só BrainIAC e radiomics. Resultados em `results
 Testes extra (AUC das predições pooled de CV, teste de DeLong vs o melhor baseline;
 Holm-Bonferroni na família primária):
 
-| Método | AUC Bonn | Δ vs baseline | p-Holm |
+| Método | AUC Bonn | Δ vs baseline 
 |---|---|---|---|
-| **Baseline** | **0,791** (radiomics) | — | — |
-| Fusão early (concat) | 0,873 | +0,082 | 0,045 |
-| SHAP + fusão | 0,837 | +0,047 | 0,49 |
-| Fusão late (stacking) | 0,817 | +0,026 | 1,0 |
-| SHAP + radiomics | 0,797 | +0,006 | 1,0 |
-| SHAP + BrainIAC (768d) | 0,777 | −0,014 | 1,0 |
-| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,740 | −0,050 | 0,22 (p bruto) |
-| Volume hipocampal (SynthSeg) | 0,558 | −0,233 | <0,001 |
+| **Baseline** | **0,791** (radiomics) | — |
+| Fusão early (concat) | 0,873 | +0,082 
+| SHAP + fusão | 0,837 | +0,047 |
+| Fusão late (stacking) | 0,817 | +0,026 
+| SHAP + radiomics | 0,797 | +0,006 |
+| SHAP + BrainIAC (768d) | 0,777 | −0,014 |
+| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,740 | −0,050 | 
+| Volume hipocampal (SynthSeg) | 0,558 | −0,233 
 
 A fusão early é a única diferença significativa após correção. O volume hipocampal é
 próximo do acaso — esperado, já que a DCF é uma lesão cortical, não hipocampal — e o
