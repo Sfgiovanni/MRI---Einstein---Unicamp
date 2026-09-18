@@ -1,77 +1,76 @@
-# BrainIAC + ML para classificação binária AD vs CN
+# BrainIAC + ML for Binary AD vs CN Classification
 
-Pipeline de pesquisa reproduzível que usa o modelo fundacional **BrainIAC** (Tak et al.,
-Nature Neuroscience 2026) como extrator de features de MRI estrutural T1w, treina
-classificadores de ML clássicos sobre essas features para classificação binária
-**Alzheimer (AD) vs. controle cognitivamente normal (CN)**, e compara com baselines de
-radiomics e volumetria clássica.
-
-
+Reproducible research pipeline using the **BrainIAC** foundation model (Tak et al., Nature Neuroscience 2026) as a feature extractor for structural T1w MRI, training classical ML classifiers on these features for binary **Alzheimer's disease (AD) vs. cognitively normal control (CN)** classification, and comparing them against radiomics and classical volumetry baselines.
 
 ## Datasets
 
-### OASIS-1 (primeiro dataset)
-- Fonte: https://sites.wustl.edu/oasisbrains/home/oasis-1/
-- Mapeamento binário: **CN = CDR==0** (n=135), **AD = CDR>=0.5** (n=100), sujeitos sem
-  CDR avaliado (jovens/meia-idade) excluídos. Ver detalhes e limitações (confundimento
-  de idade, Δ~7.7 anos) em `PROGRESS.md`.
+### OASIS-1 (first dataset)
 
-### OASIS-2 (segundo dataset)
+* Source: https://sites.wustl.edu/oasisbrains/home/oasis-1/
+* Binary mapping: **CN = CDR==0** (n=135), **AD = CDR>=0.5** (n=100). Subjects without an assessed CDR score (young/middle-aged participants) are excluded. See `PROGRESS.md` for details and limitations, including age confounding (Δ~7.7 years).
 
-- Fonte: https://sites.wustl.edu/oasisbrains/home/oasis-2/ (longitudinal, 150 sujeitos,
-  1 scan/sujeito mantido = sessão baseline `_MR1`)
+### OASIS-2 (second dataset)
+
+* Source: https://sites.wustl.edu/oasisbrains/home/oasis-2/ (longitudinal, 150 subjects, 1 scan/subject retained = baseline session `_MR1`)
+
 ## Setup
 
 ```bash
-# 1. Ambiente conda (inclui `versioneer`, necessário no passo 2)
+# 1. Conda environment (includes `versioneer`, required in step 2)
 conda env create -f environment.yml
 conda activate brainiac-ad
 
-# 2. pyradiomics precisa ser instalado À PARTE, depois do resto do ambiente, com
-#    --no-build-isolation: seu setup.py legado importa numpy/versioneer no momento
-#    do build sem declarar isso como build-dependency, o que quebra com o
-#    isolamento de build padrão do pip se numpy/versioneer não estiverem já visíveis.
+# 2. pyradiomics must be installed SEPARATELY, after the rest of the environment,
+#    using --no-build-isolation. Its legacy setup.py imports numpy/versioneer at
+#    build time without declaring them as build dependencies, which breaks with
+#    pip's default build isolation when numpy/versioneer are not already available.
 pip install --no-build-isolation pyradiomics
 
-# 3. Clone do BrainIAC + patch necessário
+# 3. Clone BrainIAC + required patch
 git clone https://github.com/AIM-KannLab/BrainIAC.git third_party/BrainIAC
-# O diretório HD_BET do repo upstream não tem __init__.py, o que impede
-# `from HD_BET.hd_bet import hd_bet` de funcionar como pacote local. Sem este
-# patch, a Etapa 3 (pré-processamento) falha com ModuleNotFoundError.
+
+# The upstream repository's HD_BET directory does not contain __init__.py, which
+# prevents `from HD_BET.hd_bet import hd_bet` from working as a local package.
+# Without this patch, Step 3 (preprocessing) fails with ModuleNotFoundError.
 touch third_party/BrainIAC/src/preprocessing/HD_BET/__init__.py
 ```
 
-Pesos do BrainIAC: baixe o checkpoint `BrainIAC.ckpt` (362MB, encoder ViT-B) pelo link do Dropbox: https://www.dropbox.com/scl/fo/i51xt63roognvt7vuslbl/AG99uZljziHss5zJz4HiFis?rlkey=9w55le6tslwxlfz6c0viylmjb&st=b9cnvwh8&e=1&dl=0 
-e coloque em `checkpoints/BrainIAC.ckpt`.
+BrainIAC weights: download the `BrainIAC.ckpt` checkpoint (362 MB, ViT-B encoder) from the Dropbox link:
+
+https://www.dropbox.com/scl/fo/i51xt63roognvt7vuslbl/AG99uZljziHss5zJz4HiFis?rlkey=9w55le6tslwxlfz6c0viylmjb&st=b9cnvwh8&e=1&dl=0
+
+and place it at `checkpoints/BrainIAC.ckpt`.
 
 ```bash
-# 4. SHAP (teste extra 2) - so precisa no env brainiac-ad, nao tem dependencia especial
+# 4. SHAP (extra test 2) - only required in the brainiac-ad environment;
+#    no special dependencies are needed
 conda activate brainiac-ad
 pip install shap
 
-# 5. SynthSeg (teste extra 3, hipocampo) - env SEPARADO: o codigo e de 2020-2022 e
-#    depende de TensorFlow 2.2.0/Keras 2.3.1 standalone (nao tf.keras), incompativel
-#    com o env principal (torch/numpy modernos). cudatoolkit/cudnn instalados via conda
-#    dentro do proprio env (nao precisa de CUDA 10.1 no sistema).
+# 5. SynthSeg (extra test 3, hippocampus) - SEPARATE environment:
+#    the code is from 2020-2022 and depends on TensorFlow 2.2.0/Keras 2.3.1
+#    standalone (not tf.keras), which is incompatible with the main environment
+#    (modern torch/numpy). cudatoolkit/cudnn are installed through conda inside
+#    the environment itself (CUDA 10.1 does not need to be installed system-wide).
 conda create -n synthseg python=3.8 -y
 conda activate synthseg
 git clone https://github.com/BBillot/SynthSeg.git third_party/SynthSeg
 pip install -r third_party/SynthSeg/requirements_python3.8.txt
 conda install -c conda-forge cudatoolkit=10.1 cudnn=7.6.5 -y
-# Pesos (synthseg_1.0.h5) ja vem no clone do repo (third_party/SynthSeg/models/) -
-# sem download separado nem cadastro.
+
+# Weights (synthseg_1.0.h5) are already included in the cloned repository
+# (third_party/SynthSeg/models/) - no separate download or registration required.
 conda activate brainiac-ad
 ```
 
-## Pipeline (executar em ordem, a partir da raiz do projeto)
+## Pipeline
 
-Todos os scripts aceitam `--dataset {oasis1,oasis2}` (default `oasis1`) em vez de
-duplicar lógica por dataset - os caminhos de entrada/saída são derivados automaticamente
-(`data/{dataset}_...`, `features/{dataset}_...`, `results` para oasis1 ou
-`results_{dataset}` para os demais).
+Run the following commands in order from the project root.
+
+All scripts accept `--dataset {oasis1,oasis2}` (default: `oasis1`) instead of duplicating logic for each dataset. Input/output paths are derived automatically (`data/{dataset}_...`, `features/{dataset}_...`, `results` for OASIS-1, or `results_{dataset}` for the others).
 
 ```bash
-# OASIS-1 (dataset principal)
+# OASIS-1 (main dataset)
 python src/01_prepare_dataset.py --dataset oasis1
 python src/02_extract_and_convert.py --dataset oasis1
 bash src/03_run_brainiac_preprocessing.sh oasis1
@@ -83,7 +82,7 @@ python src/08_volumetry_baseline.py --dataset oasis1
 python src/09_evaluate_compare.py --results_dir results --figures_dir figures
 python src/10_qc_preprocessing.py --dataset oasis1
 
-# OASIS-2 (segundo dataset - mesmos scripts, so troca --dataset)
+# OASIS-2 (second dataset - same scripts, only --dataset changes)
 python src/01_prepare_dataset.py --dataset oasis2
 python src/02_extract_and_convert.py --dataset oasis2
 bash src/03_run_brainiac_preprocessing.sh oasis2
@@ -95,98 +94,82 @@ python src/08_volumetry_baseline.py --dataset oasis2
 python src/09_evaluate_compare.py --results_dir results_oasis2 --figures_dir figures_oasis2
 python src/10_qc_preprocessing.py --dataset oasis2
 
-# Reprocessamento do OASIS-1 a partir do mpr-1 bruto (nivel de entrada pareado com o
-# OASIS-2), usado apenas no lado OASIS-1 do experimento cross-dataset - ver diagnostico
-# de domain-shift em "Validacao cruzada entre coortes" abaixo
+# Reprocessing OASIS-1 starting from raw mpr-1
+# (input level matched to OASIS-2), used only on the OASIS-1 side of the
+# cross-dataset experiment - see the domain-shift diagnostic in
+# "Cross-cohort validation" below
 python src/02_extract_and_convert.py --dataset oasis1_mpr1 --labels_csv data/oasis1_labels.csv --archives_dir data/oasis1_raw/discs --output_dir data/oasis1_mpr1_raw/nifti
 bash src/03_run_brainiac_preprocessing.sh oasis1_mpr1
 python src/04_extract_brainiac_features.py --dataset oasis1_mpr1 --labels_csv data/oasis1_labels.csv
 python src/06_radiomics_baseline.py --dataset oasis1_mpr1 --labels_csv data/oasis1_labels.csv
-# Intra-dominio no MESMO nivel de entrada (mpr-1), usado so para o calculo correto do
-# gap de generalizacao (nao mistura "mudanca de coorte" com "mudanca de pipeline") -
-# reaproveita os folds do oasis1 canonico (mesmos sujeitos)
+
+# In-domain evaluation at the SAME input level (mpr-1), used only for the
+# correct computation of the generalization gap (avoids mixing "cohort shift"
+# with "pipeline shift") - reuses the canonical OASIS-1 folds (same subjects)
 python src/05_train_classifiers_brainiac.py --dataset oasis1_mpr1 --folds_csv data/oasis1_folds.csv --output_dir results_oasis1_mpr1
 python src/07_train_classifiers_radiomics.py --dataset oasis1_mpr1 --folds_csv data/oasis1_folds.csv --output_dir results_oasis1_mpr1
 
-# Experimento principal: validacao cruzada entre coortes + comparacao final
+# Main experiment: cross-cohort validation + final comparison
 python src/11_cross_dataset_validation.py
 python src/12_final_comparison.py
 python src/13_domain_shift_diagnostic.py
 ```
 
-1. `01_prepare_dataset.py` — parse demográficos OASIS-1, define rótulo binário, cria
-   5-fold CV estratificado por sujeito (`data/oasis1_labels.csv`, `data/oasis1_folds.csv`).
-2. `02_extract_and_convert.py` — extrai o volume nativo médio (`SUBJ_111`, Analyze format)
-   de cada sujeito dos discs OASIS-1 e converte para NIfTI.
-3. `03_run_brainiac_preprocessing.sh` — roda o pipeline oficial do BrainIAC (registro
-   rígido + N4 + HD-BET skull-strip) sobre os NIfTIs convertidos.
-4. `04_extract_brainiac_features.py` — extrai embeddings ViT (768-d) do BrainIAC.
-5. `05_train_classifiers_brainiac.py` — treina LogReg/SVM/RF/XGBoost/LightGBM com CV
-   k=5 por sujeito sobre os embeddings.
-6. `06_radiomics_baseline.py` + `07_train_classifiers_radiomics.py` — baseline de
-   radiomics (PyRadiomics) com o mesmo protocolo de CV.
-7. `08_volumetry_baseline.py` — baseline de volumetria clássica (eTIV/nWBV/ASF oficiais
-   do OASIS-1) com o mesmo protocolo de CV.
-8. `09_evaluate_compare.py` — agrega métricas, roda teste de DeLong, gera figuras
-   (`figures/`) e `results/summary.md` / `results/summary.csv`.
-9. `10_qc_preprocessing.py` — QC pós-hoc: distribuição da fração de voxels não-zero
-   (máscara de cérebro) em todos os sujeitos pré-processados, para detectar
-   skull-strips falhos/parciais que corromperiam silenciosamente as features de
-   BrainIAC/radiomics sem afetar a volumetria (que vem do pipeline independente do
-   OASIS) — checagem importante para não confundir "modelo não ganhou" com
-   "pré-processamento quebrou os inputs do modelo". Resultado: distribuição estreita
-   (média 0.230, dp 0.021, min 0.185, max 0.296) e mesmo shape em todos os 235
-   sujeitos — sem evidência de falha sistemática. Salvo em `results/qc_preprocessing.csv`.
-   Rodado também para o OASIS-2 (150/150 sujeitos, distribuição quase idêntica) em
-   `results_oasis2/qc_preprocessing.csv`.
-10. `11_cross_dataset_validation.py` — **experimento principal da extensão**: treina em
-    TODOS os sujeitos de um dataset, testa em TODOS os sujeitos do outro, nos 2 sentidos,
-    para cada método (mesmos `CLASSIFIER_GRIDS`/seed de `common_cv.py`). Salva
-    `results_cross/metrics_cross_dataset.csv`, `generalization_gap.csv` e predições em
-    `results_cross/predictions/`.
-11. `12_final_comparison.py` — tabela consolidada (intra-OASIS1, intra-OASIS2, e as 2
-    direções cross-dataset, por método), figuras (`figures/cross_dataset_auc_comparison.png`,
-    `figures/cross_dataset_roc.png`) e `results_cross/summary.md` com a leitura interpretativa
-    completa e as ressalvas obrigatórias.
-12. `13_domain_shift_diagnostic.py` — diagnóstico crítico: treina um classificador para
-    prever apenas de qual dataset (OASIS-1 ou OASIS-2) um sujeito veio, ignorando o rótulo
-    AD/CN. Um AUC alto indica que o espaço de features é dominado por um efeito de lote,
-    limitando quanto do AUC cross-dataset reflete sinal de doença de fato transferido.
-    Motivou o reprocessamento do OASIS-1 a partir do `mpr-1` bruto (`--dataset oasis1_mpr1`
-    em `02`/`03`/`04`/`06`) para testar (e, como o diagnóstico mostrou, refutar) a hipótese
-    de que a assimetria `SUBJ_111` vs `mpr-1` fosse a causa do efeito de lote. Salva
-    `results_cross/domain_shift_diagnostic.csv`. Ver "Validação cruzada entre coortes"
-    abaixo e `PROGRESS_dataset2.md` para o relato completo.
+1. `01_prepare_dataset.py` — parses OASIS-1 demographic data, defines the binary label, and creates subject-level stratified 5-fold CV splits (`data/oasis1_labels.csv`, `data/oasis1_folds.csv`).
 
-## Rodando o pipeline com outro dataset
+2. `02_extract_and_convert.py` — extracts the native averaged volume (`SUBJ_111`, Analyze format) for each subject from the OASIS-1 discs and converts it to NIfTI.
 
-Todo script (`01`-`13`, `20`-`31`) aceita `--dataset <nome>` e deriva os caminhos
-automaticamente (`data/<nome>_...`, `features/<nome>_...`, `results_<nome>/` — exceto
-`oasis1`, que por legado usa `results/` sem sufixo). Nenhum script tem os nomes
-`oasis1`/`oasis2` fixos no código além dos passos 1-2 (parsing de demográficos e
-extração dos arquivos brutos), que são específicos do formato OASIS por natureza.
+3. `03_run_brainiac_preprocessing.sh` — runs the official BrainIAC preprocessing pipeline (rigid registration + N4 + HD-BET skull stripping) on the converted NIfTIs.
 
-**Contrato de entrada** — para plugar um dataset novo (`$DATASET` = qualquer nome), o
-pipeline a partir do passo 03 só precisa de 3 arquivos, no formato abaixo:
+4. `04_extract_brainiac_features.py` — extracts BrainIAC ViT embeddings (768-d).
 
-| Arquivo | Colunas / conteúdo obrigatório |
-|---|---|
-| `data/${DATASET}_raw/nifti/{subject_id}.nii.gz` | 1 scan T1w nativo (com crânio) por sujeito |
-| `data/${DATASET}_labels.csv` | `subject_id`, `label` (0=CN/1=AD); `eTIV` também é obrigatório se for rodar o baseline de volumetria e o teste de volume hipocampal (normalização) |
-| `data/${DATASET}_folds.csv` | `subject_id`, `label`, `fold` — gerar com `common_cv.make_stratified_subject_folds()` (é isso que `01_prepare_dataset.py` chama por baixo) |
+5. `05_train_classifiers_brainiac.py` — trains LogReg/SVM/RF/XGBoost/LightGBM using subject-level k=5 CV on the embeddings.
 
-Se o seu dataset já tem demográficos num `.xlsx` parecido com OASIS, adicione uma função
-`prepare_<nome>()` a `DATASET_PREPARERS` em `01_prepare_dataset.py` (mesmo padrão de
-`prepare_oasis1`/`prepare_oasis2`) e uma entrada a `DATASET_PATTERNS` em
-`02_extract_and_convert.py` se os dados brutos vierem em `.tar.gz`. Caso contrário, mais
-simples é escrever um script próprio (fora deste repo ou como `01_prepare_dataset_<nome>.py`)
-que produza os 3 arquivos da tabela acima — a partir daí todo o resto funciona sem
-alteração de código.
+6. `06_radiomics_baseline.py` + `07_train_classifiers_radiomics.py` — radiomics baseline (PyRadiomics) using the same CV protocol.
+
+7. `08_volumetry_baseline.py` — classical volumetry baseline using the official OASIS-1 eTIV/nWBV/ASF variables with the same CV protocol.
+
+8. `09_evaluate_compare.py` — aggregates metrics, runs the DeLong test, generates figures (`figures/`), and creates `results/summary.md` / `results/summary.csv`.
+
+9. `10_qc_preprocessing.py` — post-hoc QC: evaluates the distribution of the fraction of non-zero voxels (brain mask) across all preprocessed subjects to detect failed/partial skull stripping that could silently corrupt BrainIAC/radiomics features without affecting volumetry, which comes from the independent OASIS pipeline. This check avoids confusing "the model did not outperform the baseline" with "preprocessing corrupted the model inputs."
+
+   Result: narrow distribution (mean 0.230, SD 0.021, min 0.185, max 0.296) and identical shape across all 235 subjects, with no evidence of systematic failure. Saved to `results/qc_preprocessing.csv`.
+
+   The same analysis was also run for OASIS-2 (150/150 subjects, nearly identical distribution) and saved to `results_oasis2/qc_preprocessing.csv`.
+
+10. `11_cross_dataset_validation.py` — **main experiment of the extension**: trains on ALL subjects from one dataset and tests on ALL subjects from the other dataset, in both directions, for each method using the same `CLASSIFIER_GRIDS`/seed from `common_cv.py`. Saves `results_cross/metrics_cross_dataset.csv`, `generalization_gap.csv`, and predictions under `results_cross/predictions/`.
+
+11. `12_final_comparison.py` — consolidated table containing intra-OASIS1, intra-OASIS2, and both cross-dataset directions for each method; figures (`figures/cross_dataset_auc_comparison.png`, `figures/cross_dataset_roc.png`); and `results_cross/summary.md` containing the complete interpretation and required caveats.
+
+12. `13_domain_shift_diagnostic.py` — critical diagnostic: trains a classifier to predict only which dataset (OASIS-1 or OASIS-2) a subject came from while ignoring the AD/CN label. A high AUC indicates that the feature space is dominated by a batch effect, limiting how much of the cross-dataset AUC reflects genuinely transferable disease signal.
+
+    This motivated reprocessing OASIS-1 from raw `mpr-1` (`--dataset oasis1_mpr1` in steps `02`/`03`/`04`/`06`) to test — and, as shown by the diagnostic, reject — the hypothesis that the `SUBJ_111` vs. `mpr-1` asymmetry caused the batch effect.
+
+    Results are saved to `results_cross/domain_shift_diagnostic.csv`. See "Cross-cohort validation" below and `PROGRESS_dataset2.md` for the complete report.
+
+## Running the Pipeline with Another Dataset
+
+Every script (`01`-`13`, `20`-`31`) accepts `--dataset <name>` and automatically derives the corresponding paths (`data/<name>_...`, `features/<name>_...`, `results_<name>/` — except `oasis1`, which for legacy reasons uses `results/` without a suffix).
+
+No script contains hard-coded `oasis1`/`oasis2` names except steps 1-2 (demographic parsing and raw-file extraction), which are inherently specific to the OASIS data format.
+
+**Input contract** — to plug in a new dataset (`$DATASET` = any name), the pipeline from step 03 onward requires only the following three inputs:
+
+| File                                            | Required columns / content                                                                                                                         |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `data/${DATASET}_raw/nifti/{subject_id}.nii.gz` | 1 native T1w scan (with skull) per subject                                                                                                         |
+| `data/${DATASET}_labels.csv`                    | `subject_id`, `label` (0=CN/1=AD); `eTIV` is also required when running the volumetry baseline and hippocampal volume test (normalization)         |
+| `data/${DATASET}_folds.csv`                     | `subject_id`, `label`, `fold` — generate using `common_cv.make_stratified_subject_folds()` (this is what `01_prepare_dataset.py` calls internally) |
+
+If your dataset already contains demographic information in an `.xlsx` file similar to OASIS, add a `prepare_<name>()` function to `DATASET_PREPARERS` in `01_prepare_dataset.py`, following the same pattern as `prepare_oasis1`/`prepare_oasis2`, and add an entry to `DATASET_PATTERNS` in `02_extract_and_convert.py` if the raw data are distributed as `.tar.gz`.
+
+Otherwise, the simplest approach is to write a custom script outside this repository, or as `01_prepare_dataset_<name>.py`, that produces the three files listed in the table above. From that point onward, the rest of the pipeline works without code changes.
 
 ```bash
-export DATASET=meudataset   # troque pelo nome do seu dataset
+export DATASET=mydataset   # replace with your dataset name
 
-# --- Pipeline base: BrainIAC vs radiomics vs volumetria (se os 3 arquivos acima existem) ---
+# --- Base pipeline: BrainIAC vs radiomics vs volumetry
+#     (if the 3 files above exist) ---
 bash src/03_run_brainiac_preprocessing.sh $DATASET
 python src/04_extract_brainiac_features.py --dataset $DATASET
 python src/05_train_classifiers_brainiac.py --dataset $DATASET
@@ -196,7 +179,8 @@ python src/08_volumetry_baseline.py --dataset $DATASET
 python src/09_evaluate_compare.py --results_dir results_$DATASET --figures_dir figures_$DATASET
 python src/10_qc_preprocessing.py --dataset $DATASET
 
-# --- Testes extra: fusão (1A/1B) + SHAP (2) - reusam as features do bloco acima ---
+# --- Extra tests: fusion (1A/1B) + SHAP (2)
+#     reuse features from the block above ---
 python src/20_prepare_fusion_features.py --dataset $DATASET
 python src/21_train_fusion_early.py --dataset $DATASET
 python src/22_train_fusion_stacking.py --dataset $DATASET
@@ -204,18 +188,22 @@ python src/23_shap_feature_selection.py --dataset $DATASET --feature_set radiomi
 python src/23_shap_feature_selection.py --dataset $DATASET --feature_set fusion
 python src/23_shap_feature_selection.py --dataset $DATASET --feature_set brainiac
 
-# --- Teste extra: hipocampo (3A/3B) - precisa do env `synthseg` (ver Setup) ---
-# ANTES de rodar: verifique a orientação do seu NIfTI bruto (ver nota em src/24) -
-# a correção aplicada é especifica do OASIS-1, outros datasets normalmente não precisam.
+# --- Extra test: hippocampus (3A/3B)
+#     requires the `synthseg` environment (see Setup) ---
+# BEFORE running: check the orientation of your raw NIfTI (see note in src/24).
+# The correction applied there is specific to OASIS-1; other datasets usually
+# do not require it.
 python src/24_prepare_hippocampus_input.py --dataset $DATASET
-conda activate synthseg  # ou: conda run -n synthseg
-# --crop 224 224 224 e um chute seguro pro tamanho de cabeca adulta numa GPU de ~11GB
-# (usamos 160x224x224 pro OASIS-1/2, ~256x256x160 nativo); se der OOM, reduza - mas
-# nunca menor que a extensao real do cerebro na sua imagem (cheque com nibabel: bounding
-# box dos voxels > threshold de fundo, e some uma margem).
+conda activate synthseg  # or: conda run -n synthseg
+
+# --crop 224 224 224 is a safe starting point for an adult head on a ~11GB GPU
+# (we used 160x224x224 for OASIS-1/2, with ~256x256x160 native images).
+# If OOM occurs, reduce it - but never below the actual brain extent in your image.
+# Check with nibabel: bounding box of voxels > background threshold, plus a margin.
 python third_party/SynthSeg/scripts/commands/SynthSeg_predict.py \
   --i data/${DATASET}_hippo_input --o results_hippocampus_$DATASET/segmentations \
   --vol results_hippocampus_$DATASET/synthseg_volumes.csv --v1 --threads 4 --crop 224 224 224
+
 conda activate brainiac-ad
 python src/25_extract_hippocampus_features.py --dataset $DATASET
 python src/26_train_classifiers_hippocampus.py --dataset $DATASET
@@ -226,111 +214,102 @@ python src/04_extract_brainiac_features.py --dataset $DATASET \
   --output_parquet features/${DATASET}_brainiac_hippo_features.parquet
 python src/28_train_classifiers_brainiac_hippo.py --dataset $DATASET
 
-# --- Consolidação: DeLong + Holm-Bonferroni vs o melhor baseline (auto-detectado) ---
+# --- Consolidation: DeLong + Holm-Bonferroni vs the best baseline
+#     (automatically detected) ---
 python src/30_consolidate_dataset.py --dataset $DATASET
 
-# --- Comparar 2+ datasets lado a lado (roda 30 para cada um antes) ---
+# --- Compare 2+ datasets side by side
+#     (run 30 for each dataset first) ---
 python src/31_consolidate_overall.py --datasets oasis1 oasis2 $DATASET
 ```
 
-O "melhor método base" usado como referência do DeLong em `src/30`/`src/31` é
-auto-detectado (maior AUC média de CV entre BrainIAC/radiomics/volumetria daquele
-dataset, ver `stats_utils.load_baseline_predictions`) — não precisa configurar nada.
+The "best base method" used as the DeLong reference in `src/30`/`src/31` is automatically detected as the method with the highest mean CV AUC among BrainIAC/radiomics/volumetry for that dataset (see `stats_utils.load_baseline_predictions`). No manual configuration is required.
 
-## Resultados
+## Results
 
-### OASIS-1 
+### OASIS-1
 
-| Método | Melhor classificador | AUC (média CV ± dp) |
-|---|---|---|
-| BrainIAC (embeddings ViT congelados) | svm_linear | 0.750 ± 0.046 |
-| Radiomics (PyRadiomics) | svm_rbf | 0.748 ± 0.012 |
-| Volumetria clássica (eTIV/nWBV/ASF) | logreg | 0.784 ± 0.039 |
+| Method                              | Best classifier | AUC (mean CV ± SD) |
+| ----------------------------------- | --------------- | ------------------ |
+| BrainIAC (frozen ViT embeddings)    | svm_linear      | 0.750 ± 0.046      |
+| Radiomics (PyRadiomics)             | svm_rbf         | 0.748 ± 0.012      |
+| Classical volumetry (eTIV/nWBV/ASF) | logreg          | 0.784 ± 0.039      |
 
+### OASIS-2
 
-### OASIS-2 
+| Method    | Best classifier | AUC (mean CV ± SD) |
+| --------- | --------------- | ------------------ |
+| BrainIAC  | logreg          | 0.710 ± 0.115      |
+| Radiomics | svm_rbf         | 0.640 ± 0.112      |
+| Volumetry | logreg          | 0.633 ± 0.086      |
 
-| Método | Melhor classificador | AUC (média CV ± dp) |
-|---|---|---|
-| BrainIAC | logreg | 0.710 ± 0.115 |
-| Radiomics | svm_rbf | 0.640 ± 0.112 |
-| Volumetria | logreg | 0.633 ± 0.086 |
+### Extra Tests: Fusion, Feature Selection (SHAP), and Hippocampal Segmentation
 
-### Testes extra: fusão, seleção de features (SHAP), segmentação hipocampal
+| Method                                          | OASIS-1 AUC           | OASIS-2 AUC          |
+| ----------------------------------------------- | --------------------- | -------------------- |
+| **Baseline**                                    | **0.748** (volumetry) | **0.710** (BrainIAC) |
+| Hippocampal volume (SynthSeg)                   | 0.807                 | 0.723                |
+| Late fusion (stacking)                          | 0.763                 | 0.705                |
+| Early fusion (concatenation)                    | 0.752                 | 0.691                |
+| SHAP + fusion                                   | 0.769                 | 0.626                |
+| SHAP + BrainIAC (768d)                          | 0.754                 | 0.642                |
+| SHAP + radiomics                                | 0.720                 | 0.602                |
+| BrainIAC on hippocampal ROI *(exploratory/OOD)* | 0.634                 | 0.567                |
 
+### Bonn (Pediatric Epilepsy: Focal Cortical Dysplasia vs. Controls)
 
-| Método | AUC OASIS-1 | AUC OASIS-2 | 
-|---|---|---|
-| **Baseline** | **0.748** (volumetria) | **0.710** (BrainIAC) | 
-| Volume hipocampal (SynthSeg) | 0,807 | 0,723 | 
-| Fusão late (stacking) | 0,763 | 0,705 | 
-| Fusão early (concat) | 0,752 | 0,691 | 
-| SHAP + fusão | 0,769 | 0,626 | 
-| SHAP + BrainIAC (768d) | 0,754 | 0,642 | 
-| SHAP + radiomics | 0,720 | 0,602 | 
-| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,634 | 0,567 | 
+Third dataset, used to test the same pipeline outside the AD/CN setting: 170 subjects (85 FCD / 85 healthy controls, ages 3–13), T1w images in BIDS format, with subject-level stratified 5-fold CV.
 
+Classical volumetry is not included because eTIV/nWBV/ASF are obtained from the OASIS spreadsheet and are unavailable here. Therefore, the baseline methods are BrainIAC and radiomics only.
 
+Results are stored in `results_bonn/` and `results_extra_bonn/`.
 
-### Bonn (epilepsia pediátrica: displasia cortical focal vs controles)
+| Method                           | Best classifier | AUC (mean CV ± SD) |
+| -------------------------------- | --------------- | ------------------ |
+| BrainIAC (frozen ViT embeddings) | svm_linear      | 0.804 ± 0.076      |
+| Radiomics (PyRadiomics)          | logreg          | 0.791 ± 0.038      |
 
-Terceiro dataset, usado para testar o mesmo pipeline fora do contexto AD/CN: 170 sujeitos
-(85 DCF / 85 controles saudáveis, 3–13 anos), T1w em BIDS, CV 5-fold estratificado por
-sujeito. Sem a volumetria clássica (eTIV/nWBV/ASF vêm da planilha do OASIS e não existem
-aqui), então os baselines são só BrainIAC e radiomics. Resultados em `results_bonn/` e
-`results_extra_bonn/`.
+Extra tests (AUC from pooled CV predictions, DeLong test vs. the best baseline; Holm-Bonferroni correction within the primary family):
 
-| Método | Melhor classificador | AUC (média CV ± dp) |
-|---|---|---|
-| BrainIAC (embeddings ViT congelados) | svm_linear | 0.804 ± 0.076 |
-| Radiomics (PyRadiomics) | logreg | 0.791 ± 0.038 |
+| Method                                          |              Bonn AUC | Δ vs. baseline |
+| ----------------------------------------------- | --------------------: | -------------: |
+| **Baseline**                                    | **0.791** (radiomics) |              — |
+| Early fusion (concatenation)                    |                 0.873 |         +0.082 |
+| SHAP + fusion                                   |                 0.837 |         +0.047 |
+| Late fusion (stacking)                          |                 0.817 |         +0.026 |
+| SHAP + radiomics                                |                 0.797 |         +0.006 |
+| SHAP + BrainIAC (768d)                          |                 0.777 |         −0.014 |
+| BrainIAC on hippocampal ROI *(exploratory/OOD)* |                 0.740 |         −0.050 |
+| Hippocampal volume (SynthSeg)                   |                 0.558 |         −0.233 |
 
-Testes extra (AUC das predições pooled de CV, teste de DeLong vs o melhor baseline;
-Holm-Bonferroni na família primária):
+Early fusion is the only statistically significant difference after correction. Hippocampal volume is close to chance level, as expected because FCD is a cortical lesion rather than a hippocampal lesion. BrainIAC applied to the hippocampal ROI inherits the same limitation and is additionally out-of-distribution for the encoder.
 
-| Método | AUC Bonn | Δ vs baseline 
-|---|---|---|---|
-| **Baseline** | **0,791** (radiomics) | — |
-| Fusão early (concat) | 0,873 | +0,082 
-| SHAP + fusão | 0,837 | +0,047 |
-| Fusão late (stacking) | 0,817 | +0,026 
-| SHAP + radiomics | 0,797 | +0,006 |
-| SHAP + BrainIAC (768d) | 0,777 | −0,014 |
-| BrainIAC no ROI do hipocampo *(exploratório/OOD)* | 0,740 | −0,050 | 
-| Volume hipocampal (SynthSeg) | 0,558 | −0,233 
+## Project Structure
 
-A fusão early é a única diferença significativa após correção. O volume hipocampal é
-próximo do acaso — esperado, já que a DCF é uma lesão cortical, não hipocampal — e o
-BrainIAC no ROI do hipocampo herda a mesma limitação, além de ser out-of-distribution
-para o encoder.
-
-## Estrutura do projeto
-
-```
-data/            dados brutos e processados de ambos os datasets (não versionado)
-checkpoints/     pesos do BrainIAC e modelos treinados
-features/        embeddings/features extraídas (parquet), prefixadas por dataset
-results/         OASIS-1: métricas, predições por fold, modelos, summary
-results_oasis2/  OASIS-2: idem, mesma estrutura
-results_cross/   validação cruzada entre coortes: métricas, predições, summary final
-results_fusion_{oasis1,oasis2}/       testes extra: fusão early/late
-results_shap_{oasis1,oasis2}/         testes extra: seleção SHAP
-results_hippocampus_{oasis1,oasis2}/  testes extra: segmentação/volume hipocampal
-results_extra_{oasis1,oasis2}/        consolidado por dataset dos testes extra
-results_extra/                        consolidado cross-dataset dos testes extra
-results_bonn/, results_*_bonn/        Bonn (DCF vs controles): mesma estrutura por dataset
-figures/         figuras comparativas (OASIS-1 + cross-dataset + testes extra)
-figures_oasis2/  figuras comparativas do OASIS-2
-logs/            stdout/stderr bruto de cada etapa
-src/             scripts numerados por etapa, parametrizados por --dataset
-third_party/     clones do BrainIAC e SynthSeg (submódulos lógicos, não git submodule)
+```text
+data/            raw and processed data from all datasets (not versioned)
+checkpoints/     BrainIAC weights and trained models
+features/        extracted embeddings/features (parquet), prefixed by dataset
+results/         OASIS-1: metrics, per-fold predictions, models, summary
+results_oasis2/  OASIS-2: same structure
+results_cross/   cross-cohort validation: metrics, predictions, final summary
+results_fusion_{oasis1,oasis2}/       extra tests: early/late fusion
+results_shap_{oasis1,oasis2}/         extra tests: SHAP selection
+results_hippocampus_{oasis1,oasis2}/  extra tests: hippocampal segmentation/volume
+results_extra_{oasis1,oasis2}/        per-dataset consolidated extra tests
+results_extra/                        cross-dataset consolidated extra tests
+results_bonn/, results_*_bonn/        Bonn (FCD vs controls): same per-dataset structure
+figures/         comparative figures (OASIS-1 + cross-dataset + extra tests)
+figures_oasis2/  OASIS-2 comparative figures
+logs/            raw stdout/stderr from each step
+src/             scripts numbered by pipeline step, parameterized by --dataset
+third_party/     BrainIAC and SynthSeg clones (logical submodules, not Git submodules)
 ```
 
-## Reprodutibilidade
+## Reproducibility
 
-Seed fixa (`SEED=42`) para numpy/torch/sklearn em todos os scripts. Splits de CV
-salvos em `data/{dataset}_folds.csv` e reutilizados por todos os métodos (BrainIAC,
-radiomics, volumetria) para garantir comparação pareada nos mesmos sujeitos/folds
-dentro de cada dataset. No cross-dataset, o mesmo checkpoint/pré-processamento/transform
-é usado para os dois datasets - condição necessária para a comparação ser válida (ver
-`PROGRESS_dataset2.md`, seção de verificação final).
+A fixed seed (`SEED=42`) is used for numpy/torch/sklearn in all scripts.
+
+CV splits are saved to `data/{dataset}_folds.csv` and reused across all methods (BrainIAC, radiomics, volumetry) to guarantee paired comparisons using the same subjects/folds within each dataset.
+
+For cross-dataset experiments, the same checkpoint, preprocessing pipeline, and transforms are used for both datasets — a necessary condition for a valid comparison. See the final verification section in `PROGRESS_dataset2.md`.
